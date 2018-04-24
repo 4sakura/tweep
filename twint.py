@@ -216,6 +216,15 @@ def cont(response):
     
     return feed, "-".join(split)
 
+def err(e, func):
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    msg = "[{}] {} - {}".format(now, func, e)
+    if arg.o:
+        print(msg, file=open(arg.o, "a", encoding="utf-8"))
+    
+    print(msg, file=open("twint_debug.log", "a", encoding="utf-8"))
+    print(msg)
+
 def follow(response):
     '''
     Response and parsing of a user's followers or following list.
@@ -226,8 +235,9 @@ def follow(response):
     # Try & Except neccessary for collecting the last feed. 
     try:
         cursor = re.findall(r'cursor=(.*?)">', str(cursor))[0]
-    except:
-        pass
+    except Exception as e:
+        if arg.debug:
+            err(e, "follow()")
 
     return followers, cursor
 
@@ -241,8 +251,10 @@ def favorite(response):
     # Try & Except neccessary for collecting the last feed.
     try:
         max_id = re.findall(r'max_id=(.*?)">', str(max_id))[0]
-    except:
-        pass
+    except Exception as e:
+        if arg.debug:
+            err(e, "favorite()")
+
     return tweets, max_id
 
 async def getfeed(init):
@@ -302,6 +314,10 @@ async def outTweet(tweet):
     datestamp = tweet.find("a", "tweet-timestamp")["title"].rpartition(" - ")[-1]
     d = datetime.datetime.strptime(datestamp, "%d %b %Y")
     date = d.strftime("%Y-%m-%d")
+    if (d.date() - datetime.datetime.strptime(arg.since, "%Y-%m-%d").date()).days == -1:
+        if _since_def_user:
+            # mitigation here, maybe find something better
+            sys.exit(0)
     timestamp = str(datetime.timedelta(seconds=int(tweet.find("span", "_timestamp")["data-time"]))).rpartition(", ")[-1]
     t = datetime.datetime.strptime(timestamp, "%H:%M:%S")
     time = t.strftime("%H:%M:%S")
@@ -331,8 +347,9 @@ async def outTweet(tweet):
             mention = "@{}".format(mentions[i])
             if mention not in text:
                 text = "{} {}".format(mention, text)
-    except:
-        pass
+    except Exception as e:
+        if arg.debug:
+            err(e, "outTweet()")
     
     # Preparing storage
     
@@ -521,14 +538,14 @@ async def getTweet(url):
         soup = BeautifulSoup(response, "html.parser")
         tweet = soup.find("div", "permalink-inner permalink-tweet-container")
         copyright = tweet.find("div", "StreamItemContent--withheld")
-        print(url)
         if copyright is None:
             if arg.elasticsearch:
                 print(await outTweet(tweet), end=".", flush=True)
             else:
                 print(await outTweet(tweet))
-    except:
-        pass
+    except Exception as e:
+        if arg.debug:
+            err(e, "getTweet()")
 
 async def getFavorites(init):
     '''
@@ -549,8 +566,9 @@ async def getFavorites(init):
                 futures.append(loop.run_in_executor(executor, await getTweet(url)))
 
             await asyncio.gather(*futures)
-    except:
-        pass
+    except Exception as e:
+        if arg.debug:
+            err(e, "getFavorites()")
 
     return tweets, init, count
 
@@ -613,10 +631,13 @@ async def main():
     else:
         _until = datetime.date.today()
     
+    global _since_def_user
     if arg.since:
         _since = datetime.datetime.strptime(arg.since, "%Y-%m-%d").date()
+        _since_def_user = True
     else:
         _since = datetime.datetime.strptime("2006-03-21", "%Y-%m-%d").date() # the 1st tweet
+        _since_def_user = False
 
     if arg.elasticsearch:
         print("Indexing to Elasticsearch @ " + str(arg.elasticsearch))
@@ -630,7 +651,10 @@ async def main():
             sys.exit(1)
 
     if not arg.timedelta:
-        arg.timedelta = 30
+        if (_until - _since).days > 30:
+            arg.timedelta = 30
+        else:
+            arg.timedelta = (_until - _since).days
 
     if arg.userid is not None:
         arg.u = await getUsername()
@@ -639,30 +663,38 @@ async def main():
     init = -1
     num = 0
     action = getAction()
-    while _since < _until:
-        arg.since = str(_until - datetime.timedelta(days=int(arg.timedelta)))
-        arg.until = str(_until)
-        '''
-        If our response from getFeed() has an exception,
-        it signifies there are no position IDs to continue
-        with, telling Twint it's finished scraping.
-        '''
-        if len(feed) > 0:
-            if action != "":
+    if action != "":
+        while True:
+            if len(feed) > 0:
                 if arg.favorites:
                     feed, init, count = await getFavorites(init)
+                    num += count
                 else:
                     feed, init = await getFollow(init)
             else:
+                break
+
+            if arg.limit is not None and num >= int(arg.limit):
+                break
+    else:
+        while _since < _until:
+            arg.since = str(_until - datetime.timedelta(days=int(arg.timedelta)))
+            arg.until = str(_until)
+            '''
+            If our response from getFeed() has an exception,
+            it signifies there are no position IDs to continue
+            with, telling Twint it's finished scraping.
+            '''
+            if len(feed) > 0:
                 feed, init, count = await getTweets(init)
                 num += count
-        else:
-            _until = _until - datetime.timedelta(days=int(arg.timedelta))
-            feed = [-1]
-            break
-        # Control when we want to stop scraping.
-        if arg.limit is not None and num >= int(arg.limit):
-            break
+            else:
+                _until = _until - datetime.timedelta(days=int(arg.timedelta))
+                feed = [-1]
+
+            # Control when we want to stop scraping.
+            if arg.limit is not None and num >= int(arg.limit):
+                break
 
     if arg.database:
         now = str(datetime.datetime.now())
@@ -730,6 +762,7 @@ if __name__ == "__main__":
     ap.add_argument("--followers", help="Scrape a person's followers", action="store_true")
     ap.add_argument("--following", help="Scrape who a person follows.", action="store_true")
     ap.add_argument("--favorites", help="Scrape Tweets a user has liked.", action="store_true")
+    ap.add_argument("--debug", help="Debug mode", action="store_true")
     arg = ap.parse_args()
 
     check()

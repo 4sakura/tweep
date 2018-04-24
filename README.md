@@ -1,5 +1,5 @@
-# Twint - Twitter Intelligence Tool
-![Version](https://img.shields.io/badge/Version-1.0-blue.svg) [![Build Status](https://travis-ci.org/haccer/twint.svg?branch=master)](https://travis-ci.org/haccer/tweep/) [![Python 3.5|3.6](https://img.shields.io/badge/Python-3.5%2F3.6-blue.svg)](https://www.python.org/download/releases/3.0/) [![GitHub license](https://img.shields.io/github/license/haccer/tweep.svg)](https://github.com/haccer/tweep/blob/master/LICENSE)
+# TWINT - Twitter Intelligence Tool
+![Version](https://img.shields.io/badge/Version-1.0-blue.svg) [![Build Status](https://travis-ci.org/haccer/twint.svg?branch=master)](https://travis-ci.org/haccer/twint/) [![Python 3.5|3.6](https://img.shields.io/badge/Python-3.5%2F3.6-blue.svg)](https://www.python.org/download/releases/3.0/) [![GitHub license](https://img.shields.io/github/license/haccer/tweep.svg)](https://github.com/haccer/tweep/blob/master/LICENSE)
 
 >No authentication. No API. No limits.
 
@@ -36,7 +36,7 @@ A few simple examples to help you understand the basics:
 - `python3 twint.py -u username -es localhost:9200` - Output Tweets to Elasticsearch
 - `python3 twint.py -u username -o file.json --json` - Scrape Tweets and save as a json file.
 - `python3 twint.py -u username --database tweets.db` - Save Tweets to a SQLite database.
-- `python3 twint.py -u username --folowers` - Scrape a Twitter user's followers.
+- `python3 twint.py -u username --followers` - Scrape a Twitter user's followers.
 - `python3 twint.py -u username --following` - Scrape who a Twitter user follows.
 - `python3 twint.py -u username --favorites` - Collect all the Tweets a user has favorited.
 
